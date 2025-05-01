@@ -1,0 +1,4 @@
+numpy>=1.21.0
+gymnasium>=0.28.1
+pettingzoo[atari]>=1.24.1
+supersuit>=3.7.1 
