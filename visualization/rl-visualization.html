@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>강화학습 알고리즘 3D 시각화</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: white;
+        }
+        #canvas { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            max-width: 300px;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        button {
+            background: #2a3a8c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #3f51b5;
+        }
+        button.active {
+            background: #1a237e;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .legend {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            text-align: center;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        /* 노드 세부 정보 패널 스타일 */
+        #node-detail {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #3f51b5;
+            box-shadow: 0 0 30px rgba(63, 81, 181, 0.5);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 150;
+            width: 60%;
+            max-width: 800px;
+            height: 70%;
+            display: none;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        #node-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #3f51b5;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        #node-detail-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+        }
+        #close-detail {
+            background: transparent;
+            color: #f44336;
+            border: 1px solid #f44336;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+        #close-detail:hover {
+            background: rgba(244, 67, 54, 0.2);
+        }
+        #node-detail-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        /* 스크롤바 스타일 */
+        #node-detail-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        #node-detail-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        #node-detail-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+        #node-detail-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* 세부 시각화 영역 */
+        #node-viz {
+            height: 300px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            margin: 15px 0;
+            position: relative;
+        }
+        
+        .code-block {
+            background: rgba(30, 30, 30, 0.7);
+            border-radius: 5px;
+            padding: 15px;
+            font-family: monospace;
+            overflow-x: auto;
+            white-space: pre;
+            margin: 10px 0;
+            line-height: 1.4;
+            border-left: 3px solid #3f51b5;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: #7986cb;
+        }
+        
+        .description {
+            line-height: 1.5;
+            margin-bottom: 15px;
+        }
+        
+        .hint {
+            color: #aaa;
+            font-style: italic;
+            text-align: center;
+            margin-top: 10px;
+        }
+        
+        /* 함수 블록 스타일 */
+        .function-block {
+            background: rgba(40, 53, 147, 0.2);
+            border: 1px solid rgba(63, 81, 181, 0.3);
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .function-name {
+            font-weight: bold;
+            color: #7986cb;
+            margin-bottom: 5px;
+        }
+        .function-params {
+            color: #aaa;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+        .function-description {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas"></div>
+    
+    <div id="info">
+        <h2>강화학습 알고리즘 시각화</h2>
+        <p>알고리즘을 선택하여 학습 과정을 3D로 시각화해보세요.</p>
+        <p>마우스로 드래그하여 시점을 변경하고, 스크롤하여 확대/축소할 수 있습니다.</p>
+        <p>노드를 클릭하면 세부 정보를 확인할 수 있습니다.</p>
+    </div>
+    
+    <div class="legend">
+        <h3>범례</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff5722;"></div>
+            <span>Agent</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #2196f3;"></div>
+            <span>Environment</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4caf50;"></div>
+            <span>Policy</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #9c27b0;"></div>
+            <span>Value Function</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffeb3b;"></div>
+            <span>데이터 흐름</span>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="ppo-btn">PPO</button>
+        <button id="coma-btn">COMA</button>
+        <button id="qmix-btn">QMIX</button>
+        <button id="reset-btn">초기화</button>
+    </div>
+    
+    <div class="loading" id="loading">
+        <p>알고리즘 로딩 중...</p>
+    </div>
+    
+    <!-- 노드 세부 정보 패널 -->
+    <div id="node-detail">
+        <div id="node-detail-header">
+            <div id="node-detail-title">노드 세부 정보</div>
+            <button id="close-detail">×</button>
+        </div>
+        <div id="node-detail-content">
+            <div id="node-description" class="description"></div>
+            <div id="node-viz"></div>
+            <p class="hint">이 영역에 노드 내부 로직의 시각화가 표시됩니다.</p>
+            <div id="node-functions"></div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <script>
+        // 메인 Three.js 변수
+        let scene, camera, renderer, controls;
+        let nodes = {};
+        let dataParticles = [];
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        let clock = new THREE.Clock();
+        let currentAlgorithm = '';
+        let animationFrameId = null;
+        let selectedNode = null;
+        let nodeDetailSubScene = null;
+        let nodeDetailCamera = null;
+        let nodeDetailRenderer = null;
+        
+        // 노드 색상
+        const nodeColors = {
+            agent: 0xff5722,
+            environment: 0x2196f3,
+            policy: 0x4caf50,
+            value: 0x9c27b0,
+            critic: 0xe91e63,
+            mixer: 0xffc107,
+            memory: 0x607d8b,
+            default: 0xcccccc
+        };
+        
+        // 노드별 세부 정보 정의
+        const nodeDetails = {
+            // PPO 알고리즘 노드
+            "agent": {
+                title: "Agent (에이전트)",
+                description: "Agent는 환경과 상호작용하며 데이터를 수집하고 정책(Policy)과 가치 함수(Value Function)를 기반으로 행동을 선택합니다. PPO 알고리즘에서 에이전트는 중요한 역할을 담당합니다.",
+                functions: [
+                    {
+                        name: "select_action",
+                        params: "state, policy_network",
+                        description: "현재 상태에서 정책 네트워크를 사용하여 행동을 선택합니다. PPO에서는 행동 확률 분포에서 샘플링하여 행동을 결정합니다."
+                    },
+                    {
+                        name: "collect_experience",
+                        params: "env, policy_network, steps",
+                        description: "환경과 상호작용하며 경험 데이터를 수집합니다. 이 데이터는 학습에 사용됩니다."
+                    },
+                    {
+                        name: "compute_advantages",
+                        params: "rewards, values, gamma, lambda",
+                        description: "GAE(Generalized Advantage Estimation)를 사용하여 각 상태의 장점(advantage)를 계산합니다."
+                    }
+                ]
+            },
+            "env": {
+                title: "Environment (환경)",
+                description: "강화학습 환경은 에이전트가 상호작용하는 세계를 표현합니다. 에이전트가 행동을 취하면 환경은 새로운 상태와 보상을 반환합니다.",
+                functions: [
+                    {
+                        name: "step",
+                        params: "action",
+                        description: "에이전트의 행동에 따라 환경을 한 단계 진행하고 새 상태, 보상, 종료 여부를 반환합니다."
+                    },
+                    {
+                        name: "reset",
+                        params: "",
+                        description: "환경을 초기 상태로 재설정합니다. 에피소드 시작 시 호출됩니다."
+                    },
+                    {
+                        name: "render",
+                        params: "",
+                        description: "환경의 현재 상태를 시각적으로 렌더링합니다(선택적 기능)."
+                    }
+                ]
+            },
+            "policy": {
+                title: "Policy Network (정책 네트워크)",
+                description: "정책 네트워크는 주어진 상태에서 어떤 행동을 취할지 결정하는 신경망입니다. PPO에서는 이 정책을 점진적으로 업데이트하여 안정적인 학습을 보장합니다.",
+                functions: [
+                    {
+                        name: "forward",
+                        params: "state",
+                        description: "상태를 입력으로 받아 행동 확률 분포(액션의 로그 확률)를 출력합니다."
+                    },
+                    {
+                        name: "get_log_prob",
+                        params: "state, action",
+                        description: "특정 상태에서 특정 행동을 선택할 로그 확률을 계산합니다."
+                    },
+                    {
+                        name: "update",
+                        params: "states, actions, old_log_probs, advantages, clip_param",
+                        description: "PPO의 목적 함수를 사용하여 정책 네트워크를 업데이트합니다. 클리핑을 통해 업데이트 크기를 제한합니다."
+                    },
+                    {
+                        name: "kl_divergence",
+                        params: "old_policy",
+                        description: "현재 정책과 이전 정책 간의 KL 발산을 계산하여 변화 정도를 측정합니다."
+                    }
+                ]
+            },
+            "value": {
+                title: "Value Network (가치 네트워크)",
+                description: "가치 네트워크는 주어진 상태의 가치를 평가하는 신경망입니다. PPO에서는 상태 가치 함수(V)를 추정하여 장점(advantage) 계산에 사용합니다.",
+                functions: [
+                    {
+                        name: "forward",
+                        params: "state",
+                        description: "상태를 입력으로 받아 해당 상태의 가치 추정값을 출력합니다."
+                    },
+                    {
+                        name: "compute_value_loss",
+                        params: "states, returns",
+                        description: "예측 가치와 실제 수익 간의 MSE 손실을 계산합니다."
+                    },
+                    {
+                        name: "update",
+                        params: "states, returns",
+                        description: "계산된 손실을 기반으로 가치 네트워크의 가중치를 업데이트합니다."
+                    }
+                ]
+            },
+            "memory": {
+                title: "Experience Buffer (경험 버퍼)",
+                description: "경험 버퍼는 에이전트가 환경과 상호작용하며 수집한 경험 데이터를 저장합니다. PPO에서는 이 데이터를 여러 번 재사용하여 학습합니다.",
+                functions: [
+                    {
+                        name: "add",
+                        params: "state, action, reward, next_state, done, log_prob",
+                        description: "새로운 경험 데이터를 버퍼에 추가합니다."
+                    },
+                    {
+                        name: "sample",
+                        params: "batch_size",
+                        description: "버퍼에서 랜덤하게 배치 크기만큼의 경험 데이터를 샘플링합니다."
+                    },
+                    {
+                        name: "get_iterator",
+                        params: "batch_size, num_epochs",
+                        description: "전체 버퍼를 여러 번 반복하여 데이터를 제공하는 이터레이터를 반환합니다."
+                    },
+                    {
+                        name: "clear",
+                        params: "",
+                        description: "버퍼를 비웁니다. 일반적으로 정책 업데이트 후 호출됩니다."
+                    }
+                ]
+            },
+            
+            // COMA 알고리즘 노드
+            "central-controller": {
+                title: "Central Controller (중앙 제어기)",
+                description: "COMA에서 중앙 제어기는 모든 에이전트의 행동을 조정하고 전체 상태 정보를 사용하여 결정을 내립니다.",
+                functions: [
+                    {
+                        name: "get_actions",
+                        params: "global_state, agent_obs",
+                        description: "전역 상태와 각 에이전트의 관측을 기반으로 모든 에이전트의 행동을 결정합니다."
+                    },
+                    {
+                        name: "coordinate_agents",
+                        params: "agent_actions",
+                        description: "에이전트들의 행동을 조율하여 전체 팀의 성능을 최적화합니다."
+                    },
+                    {
+                        name: "update_policy",
+                        params: "experiences, critic_values",
+                        description: "중앙화된 비평자(critic)의 평가를 기반으로 각 에이전트의 정책을 업데이트합니다."
+                    }
+                ]
+            },
+            "critic": {
+                title: "Centralized Critic (중앙화된 비평자)",
+                description: "COMA의 중앙화된 비평자는 전체 상태와 모든 에이전트의 행동을 고려하여 가치를 평가합니다. 이는 다른 에이전트의 행동이 고정되었을 때 특정 에이전트의 행동에 대한 가치를 계산하는 데 사용됩니다.",
+                functions: [
+                    {
+                        name: "evaluate",
+                        params: "global_state, agent_actions",
+                        description: "전역 상태와 모든 에이전트의 행동을 입력으로 받아 Q-값을 출력합니다."
+                    },
+                    {
+                        name: "compute_counterfactual_values",
+                        params: "global_state, agent_actions, agent_id",
+                        description: "특정 에이전트의 행동을 변경했을 때의 Q-값을 계산하여 해당 에이전트의 기여도를 평가합니다."
+                    },
+                    {
+                        name: "update",
+                        params: "global_states, agent_actions, rewards, next_states",
+                        description: "TD 오차를 최소화하도록 중앙화된 비평자 네트워크를 업데이트합니다."
+                    }
+                ]
+            },
+            "agent1": {
+                title: "Agent 1 (에이전트 1)",
+                description: "COMA 알고리즘에서 개별 에이전트는 자신의 관측만을 기반으로 행동을 선택하지만, 중앙 제어기와 상호작용합니다.",
+                functions: [
+                    {
+                        name: "get_observation",
+                        params: "",
+                        description: "환경으로부터 부분적인 관측을 받습니다."
+                    },
+                    {
+                        name: "select_action",
+                        params: "observation, policy",
+                        description: "관측을 기반으로 행동을 선택합니다."
+                    },
+                    {
+                        name: "receive_feedback",
+                        params: "reward, counterfactual_advantage",
+                        description: "중앙 비평자로부터 피드백을 받아 정책을 개선합니다."
+                    }
+                ]
+            },
+            "agent2": {
+                title: "Agent 2 (에이전트 2)",
+                description: "COMA 알고리즘에서 개별 에이전트는 자신의 관측만을 기반으로 행동을 선택하지만, 중앙 제어기와 상호작용합니다.",
+                functions: [
+                    {
+                        name: "get_observation",
+                        params: "",
+                        description: "환경으로부터 부분적인 관측을 받습니다."
+                    },
+                    {
+                        name: "select_action",
+                        params: "observation, policy",
+                        description: "관측을 기반으로 행동을 선택합니다."
+                    },
+                    {
+                        name: "receive_feedback",
+                        params: "reward, counterfactual_advantage",
+                        description: "중앙 비평자로부터 피드백을 받아 정책을 개선합니다."
+                    }
+                ]
+            },
+            "agent3": {
+                title: "Agent 3 (에이전트 3)",
+                description: "COMA 알고리즘에서 개별 에이전트는 자신의 관측만을 기반으로 행동을 선택하지만, 중앙 제어기와 상호작용합니다.",
+                functions: [
+                    {
+                        name: "get_observation",
+                        params: "",
+                        description: "환경으로부터 부분적인 관측을 받습니다."
+                    },
+                    {
+                        name: "select_action",
+                        params: "observation, policy",
+                        description: "관측을 기반으로 행동을 선택합니다."
+                    },
+                    {
+                        name: "receive_feedback",
+                        params: "reward, counterfactual_advantage",
+                        description: "중앙 비평자로부터 피드백을 받아 정책을 개선합니다."
+                    }
+                ]
+            },
+            
+            // QMIX 알고리즘 노드
+            "mixer": {
+                title: "QMIX Mixer (큐믹스 믹서)",
+                description: "QMIX 믹서는 개별 에이전트의 Q-값을 결합하여 전체 팀의 Q-값을 생성합니다. 단조 증가 네트워크를 사용하여 개별 값과 전체 값 간의 관계를 유지합니다.",
+                functions: [
+                    {
+                        name: "mix_q_values",
+                        params: "agent_q_values, global_state",
+                        description: "각 에이전트의 Q-값을 입력으로 받아 전체 팀의 Q-값을 계산합니다."
+                    },
+                    {
+                        name: "compute_weights",
+                        params: "global_state",
+                        description: "전역 상태를 기반으로 믹싱 네트워크의 가중치를 생성합니다."
+                    },
+                    {
+                        name: "ensure_monotonicity",
+                        params: "weights",
+                        description: "가중치 행렬이 양수임을 보장하여 단조성을 유지합니다."
+                    },
+                    {
+                        name: "update",
+                        params: "experiences, target_q_values",
+                        description: "목표 Q-값과의 차이를 최소화하도록 믹서 네트워크를 업데이트합니다."
+                    }
+                ]
+            },
+            "hypernetwork": {
+                title: "Hypernetwork (하이퍼네트워크)",
+                description: "QMIX에서 하이퍼네트워크는 전역 상태를 기반으로 믹싱 네트워크의 가중치를 동적으로 생성합니다.",
+                functions: [
+                    {
+                        name: "generate_weights",
+                        params: "global_state",
+                        description: "전역 상태를 입력으로 받아 믹싱 네트워크의 가중치와 편향을 생성합니다."
+                    },
+                    {
+                        name: "apply_constraints",
+                        params: "weights",
+                        description: "생성된 가중치에 절대값 함수를 적용하여 양수임을 보장합니다."
+                    },
+                    {
+                        name: "update",
+                        params: "global_states, target_weights",
+                        description: "목표 가중치와의 차이를 최소화하도록 하이퍼네트워크를 업데이트합니다."
+                    }
+                ]
+            }
+        };
+        
+        // Three.js 초기화
+        function init() {
+            // 씬 생성
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050520);
+            
+            // 카메라 설정
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 20;
+            
+            // 렌더러 설정
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('canvas').appendChild(renderer.domElement);
+            
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
+            
+            // 카메라 컨트롤 설정
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            // 그리드 추가
+            const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+            gridHelper.position.y = -5;
+            scene.add(gridHelper);
+            
+            // 이벤트 리스너
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+            
+            // 버튼 이벤트 설정
+            document.getElementById('ppo-btn').addEventListener('click', () => loadAlgorithm('ppo'));
+            document.getElementById('coma-btn').addEventListener('click', () => loadAlgorithm('coma'));
+            document.getElementById('qmix-btn').addEventListener('click', () => loadAlgorithm('qmix'));
+            document.getElementById('reset-btn').addEventListener('click', resetScene);
+            
+            // 배경에 별 추가
+            addStars();
+            
+            // 애니메이션 시작
+            animate();
+        }
+        
+        // OrbitControls 클래스 구현
+        class OrbitControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.enableDamping = false;
+                this.dampingFactor = 0.05;
+                this.rotateSpeed = 1.0;
+                this.zoomSpeed = 1.0;
+                
+                this.target = new THREE.Vector3();
+                this.mouseButtons = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
+                
+                this.spherical = new THREE.Spherical();
+                this.sphericalDelta = new THREE.Spherical();
+                this.scale = 1;
+                this.zoomFrags = 0;
+                this.rotateStart = new THREE.Vector2();
+                this.rotateEnd = new THREE.Vector2();
+                this.rotateDelta = new THREE.Vector2();
+                
+                this.STATE = { NONE: -1, ROTATE: 0, ZOOM: 1, PAN: 2 };
+                this.state = this.STATE.NONE;
+                
+                // 이벤트 핸들러
+                this.onMouseDown = this.onMouseDown.bind(this);
+                this.onMouseMove = this.onMouseMove.bind(this);
+                this.onMouseUp = this.onMouseUp.bind(this);
+                this.onMouseWheel = this.onMouseWheel.bind(this);
+                
+                // 이벤트 리스너 등록
+                this.domElement.addEventListener('mousedown', this.onMouseDown);
+                this.domElement.addEventListener('wheel', this.onMouseWheel);
+                document.addEventListener('mouseup', this.onMouseUp);
+            }
+            
+            onMouseDown(event) {
+                event.preventDefault();
+                
+                if (event.button === this.mouseButtons.LEFT) {
+                    this.state = this.STATE.ROTATE;
+                    this.rotateStart.set(event.clientX, event.clientY);
+                }
+                
+                document.addEventListener('mousemove', this.onMouseMove);
+            }
+            
+            onMouseMove(event) {
+                if (this.state === this.STATE.ROTATE) {
+                    this.rotateEnd.set(event.clientX, event.clientY);
+                    this.rotateDelta.subVectors(this.rotateEnd, this.rotateStart);
+                    
+                    // 회전 처리
+                    const element = this.domElement;
+                    this.sphericalDelta.theta -= 2 * Math.PI * this.rotateDelta.x / element.clientWidth * this.rotateSpeed;
+                    this.sphericalDelta.phi -= 2 * Math.PI * this.rotateDelta.y / element.clientHeight * this.rotateSpeed;
+                    
+                    this.rotateStart.copy(this.rotateEnd);
+                    this.update();
+                }
+            }
+            
+            onMouseUp() {
+                document.removeEventListener('mousemove', this.onMouseMove);
+                this.state = this.STATE.NONE;
+            }
+            
+            onMouseWheel(event) {
+                event.preventDefault();
+                
+                if (event.deltaY < 0) {
+                    this.dollyIn(1.1);
+                } else if (event.deltaY > 0) {
+                    this.dollyOut(1.1);
+                }
+                
+                this.update();
+            }
+            
+            dollyIn(dollyScale) {
+                this.scale /= dollyScale;
+            }
+            
+            dollyOut(dollyScale) {
+                this.scale *= dollyScale;
+            }
+            
+            update() {
+                const position = this.camera.position;
+                const offset = new THREE.Vector3();
+                
+                // 현재 카메라 위치에서 구면 좌표 계산
+                offset.copy(position).sub(this.target);
+                this.spherical.setFromVector3(offset);
+                
+                // 구면 좌표 업데이트
+                this.spherical.theta += this.sphericalDelta.theta;
+                this.spherical.phi += this.sphericalDelta.phi;
+                
+                // 각도 제한
+                this.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.spherical.phi));
+                
+                this.spherical.radius *= this.scale;
+                
+                // 최소/최대 거리 제한
+                this.spherical.radius = Math.max(1, Math.min(100, this.spherical.radius));
+                
+                // 타겟 위치에서 새 카메라 위치 적용
+                offset.setFromSpherical(this.spherical);
+                position.copy(this.target).add(offset);
+                
+                this.camera.lookAt(this.target);
+                
+                if (this.enableDamping) {
+                    this.sphericalDelta.theta *= (1 - this.dampingFactor);
+                    this.sphericalDelta.phi *= (1 - this.dampingFactor);
+                } else {
+                    this.sphericalDelta.set(0, 0, 0);
+                }
+                
+                this.scale = 1;
+            }
+        }
+        
+        // 창 크기 변경 시 처리
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 마우스 움직임 처리
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+        
+        // 마우스 클릭 처리
+        function onMouseClick(event) {
+            event.preventDefault();
+            
+            // 마우스 위치 업데이트
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // 레이캐스터로 클릭된 객체 확인
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Object.values(nodes));
+            
+            if (intersects.length > 0) {
+                const clickedNode = intersects[0].object;
+                
+                // 노드 세부 정보 표시
+                showNodeDetail(clickedNode);
+            }
+        }
+        
+        // 노드 세부 정보 표시
+        function showNodeDetail(node) {
+            // 선택된 노드 저장
+            selectedNode = node;
+            
+            // 노드 ID와 세부 정보 가져오기
+            const nodeId = node.userData.id;
+            const nodeDetail = nodeDetails[nodeId];
+            
+            if (!nodeDetail) {
+                console.warn('No detail information for node:', nodeId);
+                return;
+            }
+            
+            // 세부 정보 패널 업데이트
+            document.getElementById('node-detail-title').textContent = nodeDetail.title;
+            document.getElementById('node-description').textContent = nodeDetail.description;
+            
+            // 함수 목록 표시
+            const functionsContainer = document.getElementById('node-functions');
+            functionsContainer.innerHTML = '';
+            
+            if (nodeDetail.functions && nodeDetail.functions.length > 0) {
+                const sectionTitle = document.createElement('div');
+                sectionTitle.className = 'section-title';
+                sectionTitle.textContent = '주요 함수';
+                functionsContainer.appendChild(sectionTitle);
+                
+                nodeDetail.functions.forEach(func => {
+                    const funcBlock = document.createElement('div');
+                    funcBlock.className = 'function-block';
+                    
+                    const funcName = document.createElement('div');
+                    funcName.className = 'function-name';
+                    funcName.textContent = func.name;
+                    
+                    const funcParams = document.createElement('div');
+                    funcParams.className = 'function-params';
+                    funcParams.textContent = func.params ? `Parameters: ${func.params}` : 'Parameters: None';
+                    
+                    const funcDesc = document.createElement('div');
+                    funcDesc.className = 'function-description';
+                    funcDesc.textContent = func.description;
+                    
+                    funcBlock.appendChild(funcName);
+                    funcBlock.appendChild(funcParams);
+                    funcBlock.appendChild(funcDesc);
+                    
+                    functionsContainer.appendChild(funcBlock);
+                });
+            }
+            
+            // 내부 로직 시각화 초기화
+            initNodeDetailVisualization(nodeId);
+            
+            // 세부 정보 패널 표시
+            document.getElementById('node-detail').style.display = 'flex';
+        }
+        
+        // 노드 세부 정보 패널 닫기
+        function closeNodeDetail() {
+            document.getElementById('node-detail').style.display = 'none';
+            
+            // 세부 시각화 정리
+            if (nodeDetailRenderer) {
+                const container = document.getElementById('node-viz');
+                if (container.querySelector('canvas')) {
+                    container.removeChild(nodeDetailRenderer.domElement);
+                }
+                nodeDetailRenderer = null;
+                nodeDetailSubScene = null;
+                nodeDetailCamera = null;
+            }
+            
+            selectedNode = null;
+        }
+        
+        // 노드 내부 로직 시각화 초기화
+        function initNodeDetailVisualization(nodeId) {
+            // 이전 시각화 정리
+            if (nodeDetailRenderer) {
+                const container = document.getElementById('node-viz');
+                if (container.querySelector('canvas')) {
+                    container.removeChild(nodeDetailRenderer.domElement);
+                }
+            }
+            
+            // 컨테이너 크기 계산
+            const container = document.getElementById('node-viz');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            // 씬 생성
+            nodeDetailSubScene = new THREE.Scene();
+            nodeDetailSubScene.background = new THREE.Color(0x0a0a0a);
+            
+            // 카메라 설정
+            nodeDetailCamera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+            nodeDetailCamera.position.set(0, 0, 10);
+            nodeDetailCamera.lookAt(0, 0, 0);
+            
+            // 렌더러 설정
+            nodeDetailRenderer = new THREE.WebGLRenderer({ antialias: true });
+            nodeDetailRenderer.setSize(width, height);
+            container.appendChild(nodeDetailRenderer.domElement);
+            
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            nodeDetailSubScene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            nodeDetailSubScene.add(directionalLight);
+            
+            // 노드 유형에 따라 다른 시각화 생성
+            switch (nodeId) {
+                case 'agent':
+                    createAgentDetailViz();
+                    break;
+                case 'policy':
+                    createPolicyDetailViz();
+                    break;
+                case 'value':
+                    createValueDetailViz();
+                    break;
+                case 'memory':
+                    createMemoryDetailViz();
+                    break;
+                case 'env':
+                    createEnvironmentDetailViz();
+                    break;
+                case 'central-controller':
+                    createCentralControllerDetailViz();
+                    break;
+                case 'critic':
+                    createCriticDetailViz();
+                    break;
+                case 'mixer':
+                    createMixerDetailViz();
+                    break;
+                case 'hypernetwork':
+                    createHypernetworkDetailViz();
+                    break;
+                default:
+                    createDefaultDetailViz(nodeId);
+            }
+            
+            // 애니메이션 시작
+            animateNodeDetail();
+        }
+        
+        // 노드 세부 정보 애니메이션
+        function animateNodeDetail() {
+            if (!nodeDetailRenderer || !nodeDetailSubScene || !nodeDetailCamera) return;
+            
+            requestAnimationFrame(animateNodeDetail);
+            
+            // 내부 오브젝트 애니메이션
+            animateDetailObjects();
+            
+            // 렌더링
+            nodeDetailRenderer.render(nodeDetailSubScene, nodeDetailCamera);
+        }
+        
+        // 내부 오브젝트 애니메이션
+        function animateDetailObjects() {
+            // 세부 씬의 요소들 애니메이션
+            if (nodeDetailSubScene) {
+                nodeDetailSubScene.children.forEach(child => {
+                    if (child.userData && child.userData.animationType) {
+                        switch (child.userData.animationType) {
+                            case 'rotate':
+                                child.rotation.y += 0.01;
+                                child.rotation.x += 0.005;
+                                break;
+                            case 'pulse':
+                                const scale = 1 + 0.1 * Math.sin(Date.now() * 0.003);
+                                child.scale.set(scale, scale, scale);
+                                break;
+                            case 'move':
+                                child.position.y = child.userData.startY + Math.sin(Date.now() * 0.002) * 0.5;
+                                break;
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 애니메이션 루프
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            // 데이터 입자 업데이트
+            updateDataParticles(delta);
+            
+            // 노드 애니메이션
+            animateNodes(delta);
+            
+            // OrbitControls 업데이트
+            if (controls) controls.update();
+            
+            // 레이캐스터 업데이트 (마우스 오버 효과용)
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Object.values(nodes));
+            
+            // 마우스 오버 효과
+            Object.values(nodes).forEach(node => {
+                if (node.userData && node.userData.defaultColor) {
+                    node.material.color.set(node.userData.defaultColor);
+                    node.material.opacity = 0.8;
+                }
+            });
+            
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                if (object.userData && object.userData.defaultColor) {
+                    object.material.color.set(0xffffff);
+                    object.material.opacity = 1;
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // 배경에 별 추가
+        function addStars() {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const starsVertices = [];
+            for (let i = 0; i < 5000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starsVertices.push(x, y, z);
+            }
+            
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            const stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+        }
+        
+        // 노드 생성 함수
+        function createNode(id, type, position, size = 1, text = '') {
+            const geometry = new THREE.SphereGeometry(size, 32, 32);
+            const color = nodeColors[type] || nodeColors.default;
+            const material = new THREE.MeshPhongMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.8,
+                specular: 0x111111,
+                shininess: 30
+            });
+            
+            const node = new THREE.Mesh(geometry, material);
+            node.position.copy(position);
+            node.userData = {
+                id: id,
+                type: type,
+                defaultColor: color,
+                description: text
+            };
+            
+            // 노드 주위에 빛나는 효과
+            const glowGeometry = new THREE.SphereGeometry(size * 1.2, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.BackSide
+            });
+            const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+            node.add(glowMesh);
+            
+            // 텍스트 라벨 추가
+            if (text) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 128;
+                
+                context.font = 'Bold 24px Arial';
+                context.fillStyle = 'white';
+                context.textAlign = 'center';
+                context.fillText(text, 128, 64);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const labelMaterial = new THREE.SpriteMaterial({
+                    map: texture,
+                    transparent: true
+                });
+                const label = new THREE.Sprite(labelMaterial);
+                label.scale.set(5, 2.5, 1);
+                label.position.set(0, size + 1, 0);
+                node.add(label);
+            }
+            
+            scene.add(node);
+            nodes[id] = node;
+            
+            return node;
+        }
+        
+        // 연결선 생성 함수
+        function createConnection(nodeA, nodeB, color = 0xffffff, thickness = 0.1) {
+            const points = [];
+            points.push(nodeA.position);
+            points.push(nodeB.position);
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: color,
+                linewidth: thickness,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            
+            return line;
+        }
+        
+        // 데이터 입자 생성 함수
+        function createDataParticle(startNode, endNode, color = 0xffeb3b, size = 0.2, speed = 2) {
+            const geometry = new THREE.SphereGeometry(size, 16, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const particle = new THREE.Mesh(geometry, material);
+            particle.position.copy(startNode.position);
+            
+            // 파티클 데이터 설정
+            particle.userData = {
+                startPos: startNode.position.clone(),
+                endPos: endNode.position.clone(),
+                progress: 0,
+                speed: speed,
+                completed: false
+            };
+            
+            scene.add(particle);
+            dataParticles.push(particle);
+            
+            return particle;
+        }
+        
+        // 데이터 입자 업데이트
+        function updateDataParticles(delta) {
+            dataParticles.forEach((particle, index) => {
+                if (particle.userData.completed) return;
+                
+                particle.userData.progress += delta * particle.userData.speed;
+                
+                // 진행 상태가 1보다 크면 목적지에 도달
+                if (particle.userData.progress >= 1) {
+                    particle.userData.progress = 1;
+                    particle.userData.completed = true;
+                    
+                    // 파티클이 도착지에 도달하면 잠시 후 삭제
+                    setTimeout(() => {
+                        scene.remove(particle);
+                        dataParticles.splice(dataParticles.indexOf(particle), 1);
+                    }, 1000);
+                }
+                
+                // 파티클 위치 업데이트 (곡선 경로를 따라 이동)
+                const curvePoint = new THREE.Vector3();
+                const startPos = particle.userData.startPos;
+                const endPos = particle.userData.endPos;
+                const height = startPos.distanceTo(endPos) * 0.3;
+                
+                const progress = particle.userData.progress;
+                
+                // 베지어 곡선을 사용하여 부드러운 경로 계산
+                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+                midPoint.y += height;
+                
+                // 이차 베지어 곡선
+                curvePoint.x = Math.pow(1 - progress, 2) * startPos.x + 2 * (1 - progress) * progress * midPoint.x + Math.pow(progress, 2) * endPos.x;
+                curvePoint.y = Math.pow(1 - progress, 2) * startPos.y + 2 * (1 - progress) * progress * midPoint.y + Math.pow(progress, 2) * endPos.y;
+                curvePoint.z = Math.pow(1 - progress, 2) * startPos.z + 2 * (1 - progress) * progress * midPoint.z + Math.pow(progress, 2) * endPos.z;
+                
+                particle.position.copy(curvePoint);
+                
+                // 파티클 크기 맥동
+                const scale = 1 + Math.sin(progress * Math.PI * 4) * 0.2;
+                particle.scale.set(scale, scale, scale);
+            });
+        }
+        
+        // 노드 애니메이션
+        function animateNodes(delta) {
+            Object.values(nodes).forEach(node => {
+                // 노드 회전
+                node.rotation.y += delta * 0.2;
+                
+                // 노드 부유 효과
+                if (node.userData && node.userData.initialY === undefined) {
+                    node.userData.initialY = node.position.y;
+                    node.userData.floatOffset = Math.random() * Math.PI * 2;
+                }
+                
+                const floatY = Math.sin(clock.elapsedTime + node.userData.floatOffset) * 0.1;
+                node.position.y = node.userData.initialY + floatY;
+            });
+        }
+        
+        // 알고리즘 로드
+        function loadAlgorithm(algorithm) {
+            if (currentAlgorithm === algorithm) return;
+            
+            // 로딩 표시
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            
+            // 버튼 스타일 업데이트
+            document.querySelectorAll('.controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`${algorithm}-btn`).classList.add('active');
+            
+            // 기존 시각화 제거
+            resetScene();
+            
+            // 0.5초 후 새 알고리즘 시각화 생성 (로딩 효과)
+            setTimeout(() => {
+                currentAlgorithm = algorithm;
+                
+                switch (algorithm) {
+                    case 'ppo':
+                        createPPOVisualization();
+                        break;
+                    case 'coma':
+                        createCOMAVisualization();
+                        break;
+                    case 'qmix':
+                        createQMIXVisualization();
+                        break;
+                }
+                
+                loading.style.display = 'none';
+            }, 500);
+        }
+        
+        // 씬 초기화
+        function resetScene() {
+            // 애니메이션 중지
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            
+            // 노드 및 파티클 제거
+            Object.values(nodes).forEach(node => {
+                scene.remove(node);
+            });
+            
+            dataParticles.forEach(particle => {
+                scene.remove(particle);
+            });
+            
+            // 연결선 제거 (line 객체를 따로 관리하지 않으므로 scene의 children에서 Line 타입 검색)
+            for (let i = scene.children.length - 1; i >= 0; i--) {
+                const child = scene.children[i];
+                if (child instanceof THREE.Line) {
+                    scene.remove(child);
+                }
+            }
+            
+            // 변수 초기화
+            nodes = {};
+            dataParticles = [];
+            currentAlgorithm = '';
+            
+            // 타이머 정리
+            clearAllTimeouts();
+            
+            // 버튼 스타일 초기화
+            document.querySelectorAll('.controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 애니메이션 다시 시작
+            animate();
+        }
+        
+        // 모든 setTimeout 정리
+        function clearAllTimeouts() {
+            // 매우 큰 ID까지 모든 타임아웃 정리
+            const highestId = setTimeout(() => {}, 0);
+            for (let i = 0; i < highestId; i++) {
+                clearTimeout(i);
+            }
+        }
+        
+        // COMA 알고리즘 시각화
+        function createCOMAVisualization() {
+            // 주요 노드 생성
+            const centralController = createNode('central-controller', 'agent', new THREE.Vector3(0, 0, 0), 1.5, 'Central Controller');
+            const env = createNode('env', 'environment', new THREE.Vector3(8, 0, 0), 1.2, 'Environment');
+            const agent1 = createNode('agent1', 'agent', new THREE.Vector3(-4, 4, 0), 0.8, 'Agent 1');
+            const agent2 = createNode('agent2', 'agent', new THREE.Vector3(-4, 0, 0), 0.8, 'Agent 2');
+            const agent3 = createNode('agent3', 'agent', new THREE.Vector3(-4, -4, 0), 0.8, 'Agent 3');
+            const critic = createNode('critic', 'critic', new THREE.Vector3(0, -6, 0), 1.2, 'Centralized Critic');
+            
+            // 연결선 생성
+            createConnection(centralController, env, 0x4fc3f7);
+            createConnection(env, centralController, 0x4fc3f7);
+            createConnection(centralController, agent1, 0xff5722);
+            createConnection(centralController, agent2, 0xff5722);
+            createConnection(centralController, agent3, 0xff5722);
+            createConnection(centralController, critic, 0xe91e63);
+            createConnection(agent1, centralController, 0xff5722);
+            createConnection(agent2, centralController, 0xff5722);
+            createConnection(agent3, centralController, 0xff5722);
+            createConnection(critic, centralController, 0xe91e63);
+            
+            // 데이터 흐름 시뮬레이션
+            function simulateDataFlow() {
+                // 환경에서 상태 관측
+                setTimeout(() => createDataParticle(env, centralController, 0x42a5f5, 0.2, 2), 500);
+                
+                // 중앙 컨트롤러가 각 에이전트에게 명령 전달
+                setTimeout(() => createDataParticle(centralController, agent1, 0xff5722, 0.2, 2), 1000);
+                setTimeout(() => createDataParticle(centralController, agent2, 0xff5722, 0.2, 2), 1100);
+                setTimeout(() => createDataParticle(centralController, agent3, 0xff5722, 0.2, 2), 1200);
+                
+                // 에이전트가 액션 피드백 전달
+                setTimeout(() => createDataParticle(agent1, centralController, 0xff5722, 0.2, 2), 1800);
+                setTimeout(() => createDataParticle(agent2, centralController, 0xff5722, 0.2, 2), 1900);
+                setTimeout(() => createDataParticle(agent3, centralController, 0xff5722, 0.2, 2), 2000);
+                
+                // 중앙 컨트롤러가 환경에 행동 적용
+                setTimeout(() => createDataParticle(centralController, env, 0x42a5f5, 0.2, 2), 2500);
+                
+                // 환경에서 보상 및 새 상태 반환
+                setTimeout(() => createDataParticle(env, centralController, 0xff9800, 0.3, 1.5), 3000);
+                
+                // 중앙 critic에 정보 전달
+                setTimeout(() => createDataParticle(centralController, critic, 0xe91e63, 0.2, 2), 3500);
+                
+                // critic이 평가 결과 전달
+                setTimeout(() => createDataParticle(critic, centralController, 0xe91e63, 0.2, 2), 4000);
+                
+                // 반복
+                setTimeout(simulateDataFlow, 5000);
+            }
+            
+            // 데이터 흐름 시작
+            simulateDataFlow();
+            
+            // 카메라 위치 조정
+            gsap.to(camera.position, {
+                x: 0,
+                y: 10,
+                z: 20,
+                duration: 1.5,
+                ease: "power2.inOut",
+                onUpdate: function() {
+                    camera.lookAt(new THREE.Vector3(0, 0, 0));
+                }
+            });
+        }
+        
+        // QMIX 알고리즘 시각화
+        function createQMIXVisualization() {
+            // 주요 노드 생성
+            const env = createNode('env', 'environment', new THREE.Vector3(8, 0, 0), 1.2, 'Environment');
+            const agent1 = createNode('agent1', 'agent', new THREE.Vector3(-4, 4, 0), 0.8, 'Agent 1');
+            const agent2 = createNode('agent2', 'agent', new THREE.Vector3(-4, 0, 0), 0.8, 'Agent 2');
+            const agent3 = createNode('agent3', 'agent', new THREE.Vector3(-4, -4, 0), 0.8, 'Agent 3');
+            const mixer = createNode('mixer', 'mixer', new THREE.Vector3(0, 0, 0), 1.2, 'QMIX Mixer');
+            const hypernetwork = createNode('hypernetwork', 'value', new THREE.Vector3(0, -6, 0), 1, 'Hypernetwork');
+            
+            // 연결선 생성
+            createConnection(env, agent1, 0x4fc3f7);
+            createConnection(env, agent2, 0x4fc3f7);
+            createConnection(env, agent3, 0x4fc3f7);
+            createConnection(agent1, env, 0x4fc3f7);
+            createConnection(agent2, env, 0x4fc3f7);
+            createConnection(agent3, env, 0x4fc3f7);
+            createConnection(agent1, mixer, 0xffc107);
+            createConnection(agent2, mixer, 0xffc107);
+            createConnection(agent3, mixer, 0xffc107);
+            createConnection(mixer, hypernetwork, 0x9c27b0);
+            createConnection(hypernetwork, mixer, 0x9c27b0);
+            
+            // 데이터 흐름 시뮬레이션
+            function simulateDataFlow() {
+                // 환경에서 상태 관측
+                setTimeout(() => createDataParticle(env, agent1, 0x42a5f5, 0.2, 2), 500);
+                setTimeout(() => createDataParticle(env, agent2, 0x42a5f5, 0.2, 2), 600);
+                setTimeout(() => createDataParticle(env, agent3, 0x42a5f5, 0.2, 2), 700);
+                
+                // 에이전트가 독립적인 Q값 계산
+                setTimeout(() => createDataParticle(agent1, mixer, 0xffc107, 0.2, 2), 1500);
+                setTimeout(() => createDataParticle(agent2, mixer, 0xffc107, 0.2, 2), 1600);
+                setTimeout(() => createDataParticle(agent3, mixer, 0xffc107, 0.2, 2), 1700);
+                
+                // 믹서가 하이퍼네트워크에 정보 전달
+                setTimeout(() => createDataParticle(mixer, hypernetwork, 0x9c27b0, 0.2, 2), 2500);
+                
+                // 하이퍼네트워크가 믹서에 가중치 전달
+                setTimeout(() => createDataParticle(hypernetwork, mixer, 0x9c27b0, 0.2, 2), 3000);
+                
+                // 에이전트들이 행동 수행
+                setTimeout(() => createDataParticle(agent1, env, 0x42a5f5, 0.2, 2), 3500);
+                setTimeout(() => createDataParticle(agent2, env, 0x42a5f5, 0.2, 2), 3600);
+                setTimeout(() => createDataParticle(agent3, env, 0x42a5f5, 0.2, 2), 3700);
+                
+                // 환경에서 보상 및 새 상태 반환
+                setTimeout(() => createDataParticle(env, agent1, 0xff9800, 0.3, 1.5), 4300);
+                setTimeout(() => createDataParticle(env, agent2, 0xff9800, 0.3, 1.5), 4400);
+                setTimeout(() => createDataParticle(env, agent3, 0xff9800, 0.3, 1.5), 4500);
+                
+                // 반복
+                setTimeout(simulateDataFlow, 6000);
+            }
+            
+            // 데이터 흐름 시작
+            simulateDataFlow();
+            
+            // 카메라 위치 조정
+            gsap.to(camera.position, {
+                x: 5,
+                y: 10,
+                z: 15,
+                duration: 1.5,
+                ease: "power2.inOut",
+                onUpdate: function() {
+                    camera.lookAt(new THREE.Vector3(0, 0, 0));
+                }
+            });
+        }
+        
+        // PPO 알고리즘 시각화
+        function createPPOVisualization() {
+            // 주요 노드 생성
+            const agent = createNode('agent', 'agent', new THREE.Vector3(0, 0, 0), 1.2, 'Agent');
+            const env = createNode('env', 'environment', new THREE.Vector3(8, 0, 0), 1.2, 'Environment');
+            const policy = createNode('policy', 'policy', new THREE.Vector3(-4, 3, 0), 1, 'Policy Network');
+            const value = createNode('value', 'value', new THREE.Vector3(-4, -3, 0), 1, 'Value Network');
+            const memory = createNode('memory', 'memory', new THREE.Vector3(-8, 0, 0), 1, 'Experience Buffer');
+            
+            // 연결선 생성
+            createConnection(agent, env, 0x4fc3f7);
+            createConnection(env, agent, 0x4fc3f7);
+            createConnection(agent, policy, 0x66bb6a);
+            createConnection(agent, value, 0x9575cd);
+            createConnection(agent, memory, 0xffb74d);
+            createConnection(memory, policy, 0x66bb6a);
+            createConnection(memory, value, 0x9575cd);
+            
+            // 데이터 흐름 시뮬레이션
+            function simulateDataFlow() {
+                // 환경에서 상태 관측
+                setTimeout(() => createDataParticle(env, agent, 0x42a5f5, 0.2, 2), 500);
+                
+                // 에이전트가 정책을 통해 행동 선택
+                setTimeout(() => createDataParticle(agent, policy, 0x66bb6a, 0.2, 2), 1000);
+                setTimeout(() => createDataParticle(policy, agent, 0x66bb6a, 0.2, 2), 1500);
+                
+                // 에이전트가 환경에 행동 적용
+                setTimeout(() => createDataParticle(agent, env, 0x42a5f5, 0.2, 2), 2000);
+                
+                // 환경에서 보상 및 새 상태 반환
+                setTimeout(() => createDataParticle(env, agent, 0xff9800, 0.3, 1.5), 2500);
+                
+                // 경험을 메모리에 저장
+                setTimeout(() => createDataParticle(agent, memory, 0xffb74d, 0.2, 1.5), 3000);
+                
+                // 가치 함수 업데이트
+                setTimeout(() => createDataParticle(memory, value, 0x9575cd, 0.2, 2), 4000);
+                setTimeout(() => createDataParticle(value, agent, 0x9575cd, 0.2, 2), 4500);
+                
+                // 정책 업데이트
+                setTimeout(() => createDataParticle(memory, policy, 0x66bb6a, 0.2, 2), 5000);
+                setTimeout(() => createDataParticle(policy, agent, 0x66bb6a, 0.2, 2), 5500);
+                
+                // 반복
+                setTimeout(simulateDataFlow, 6500);
+            }
+            
+            // 데이터 흐름 시작
+            simulateDataFlow();
+            
+            // 카메라 위치 조정
+            gsap.to(camera.position, {
+                x: 5,
+                y: 10,
+                z: 15,
+                duration: 1.5,
+                ease: "power2.inOut",
+                onUpdate: function() {
+                    camera.lookAt(new THREE.Vector3(0, 0, 0));
+                }
+            });
+        }
+        
+        // Agent 내부 시각화
+        function createAgentDetailViz() {
+            // 신경망 구조를 표현하는 오브젝트 생성
+            const brainGeometry = new THREE.SphereGeometry(2, 32, 32);
+            const brainMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff5722,
+                emissive: 0x330000,
+                specular: 0xffffff,
+                shininess: 50
+            });
+            const brain = new THREE.Mesh(brainGeometry, brainMaterial);
+            brain.userData.animationType = 'pulse';
+            nodeDetailSubScene.add(brain);
+            
+            // 뉴런 연결 생성
+            for (let i = 0; i < 20; i++) {
+                const neuronGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                const neuronMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xff9800,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const neuron = new THREE.Mesh(neuronGeometry, neuronMaterial);
+                
+                // 뉴런 랜덤 위치 설정
+                const radius = 4;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                
+                neuron.position.x = radius * Math.sin(phi) * Math.cos(theta);
+                neuron.position.y = radius * Math.sin(phi) * Math.sin(theta);
+                neuron.position.z = radius * Math.cos(phi);
+                
+                neuron.userData = {
+                    animationType: 'pulse',
+                    startY: neuron.position.y
+                };
+                
+                // 뉴런과 중심 연결
+                const points = [];
+                points.push(new THREE.Vector3(0, 0, 0));
+                points.push(neuron.position);
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0xff9800,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                
+                nodeDetailSubScene.add(neuron);
+                nodeDetailSubScene.add(line);
+            }
+            
+            // 텍스트 라벨
+            addTextLabel("Agent's Neural Network", new THREE.Vector3(0, -5, 0));
+        }
+        
+        // Policy Network 내부 시각화
+        function createPolicyDetailViz() {
+            // 신경망 레이어 표현
+            const layers = [4, 8, 8, 4]; // 입력층, 은닉층, 출력층 크기
+            const layerDistance = 3;
+            const nodeRadius = 0.4;
+            
+            for (let l = 0; l < layers.length; l++) {
+                const layerNodes = layers[l];
+                const layerX = (l - (layers.length - 1) / 2) * layerDistance;
+                
+                for (let n = 0; n < layerNodes; n++) {
+                    const nodeY = (n - (layerNodes - 1) / 2) * 1.2;
+                    
+                    const nodeGeometry = new THREE.SphereGeometry(nodeRadius, 16, 16);
+                    const nodeMaterial = new THREE.MeshPhongMaterial({
+                        color: 0x4caf50,
+                        emissive: 0x003300,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                    node.position.set(layerX, nodeY, 0);
+                    node.userData = {
+                        animationType: 'pulse',
+                        startY: nodeY
+                    };
+                    nodeDetailSubScene.add(node);
+                    
+                    // 다음 레이어와 연결선 추가
+                    if (l < layers.length - 1) {
+                        const nextLayerNodes = layers[l + 1];
+                        const nextLayerX = layerX + layerDistance;
+                        
+                        for (let next = 0; next < nextLayerNodes; next++) {
+                            const nextNodeY = (next - (nextLayerNodes - 1) / 2) * 1.2;
+                            
+                            const points = [];
+                            points.push(new THREE.Vector3(layerX, nodeY, 0));
+                            points.push(new THREE.Vector3(nextLayerX, nextNodeY, 0));
+                            
+                            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0x81c784,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const line = new THREE.Line(lineGeometry, lineMaterial);
+                            nodeDetailSubScene.add(line);
+                        }
+                    }
+                }
+                
+                // 레이어 라벨 추가
+                let layerName = "";
+                if (l === 0) layerName = "입력층";
+                else if (l === layers.length - 1) layerName = "출력층 (액션)";
+                else layerName = `은닉층 ${l}`;
+                
+                addTextLabel(layerName, new THREE.Vector3(layerX, -4, 0));
+            }
+        }
+        
+        // Value Network 내부 시각화
+        function createValueDetailViz() {
+            // 신경망 레이어 표현
+            const layers = [4, 6, 4, 1]; // 입력층, 은닉층, 출력층 크기
+            const layerDistance = 3;
+            const nodeRadius = 0.4;
+            
+            for (let l = 0; l < layers.length; l++) {
+                const layerNodes = layers[l];
+                const layerX = (l - (layers.length - 1) / 2) * layerDistance;
+                
+                for (let n = 0; n < layerNodes; n++) {
+                    const nodeY = (n - (layerNodes - 1) / 2) * 1.2;
+                    
+                    const nodeGeometry = new THREE.SphereGeometry(nodeRadius, 16, 16);
+                    const nodeMaterial = new THREE.MeshPhongMaterial({
+                        color: 0x9c27b0,
+                        emissive: 0x300030,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                    node.position.set(layerX, nodeY, 0);
+                    node.userData = {
+                        animationType: 'pulse',
+                        startY: nodeY
+                    };
+                    nodeDetailSubScene.add(node);
+                    
+                    // 다음 레이어와 연결선 추가
+                    if (l < layers.length - 1) {
+                        const nextLayerNodes = layers[l + 1];
+                        const nextLayerX = layerX + layerDistance;
+                        
+                        for (let next = 0; next < nextLayerNodes; next++) {
+                            const nextNodeY = (next - (nextLayerNodes - 1) / 2) * 1.2;
+                            
+                            const points = [];
+                            points.push(new THREE.Vector3(layerX, nodeY, 0));
+                            points.push(new THREE.Vector3(nextLayerX, nextNodeY, 0));
+                            
+                            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0xce93d8,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const line = new THREE.Line(lineGeometry, lineMaterial);
+                            nodeDetailSubScene.add(line);
+                        }
+                    }
+                }
+                
+                // 레이어 라벨 추가
+                let layerName = "";
+                if (l === 0) layerName = "입력층";
+                else if (l === layers.length - 1) layerName = "출력층 (가치)";
+                else layerName = `은닉층 ${l}`;
+                
+                addTextLabel(layerName, new THREE.Vector3(layerX, -4, 0));
+            }
+        }
+        
+        // Memory Buffer 내부 시각화
+        function createMemoryDetailViz() {
+            // 메모리 배열 표현
+            const rows = 4;
+            const cols = 5;
+            const cellSize = 1;
+            const spacing = 0.2;
+            
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = (c - (cols - 1) / 2) * (cellSize + spacing);
+                    const y = (r - (rows - 1) / 2) * (cellSize + spacing);
+                    
+                    // 경험 셀 생성
+                    const cellGeometry = new THREE.BoxGeometry(cellSize, cellSize, 0.2);
+                    const cellMaterial = new THREE.MeshPhongMaterial({
+                        color: 0x607d8b,
+                        transparent: true,
+                        opacity: 0.7 + Math.random() * 0.3
+                    });
+                    const cell = new THREE.Mesh(cellGeometry, cellMaterial);
+                    cell.position.set(x, y, 0);
+                    
+                    // 셀을 주기적으로 깜박이게 하여 메모리 활동 시뮬레이션
+                    cell.userData = {
+                        animationType: 'pulse',
+                        pulseSpeed: 0.5 + Math.random() * 0.5
+                    };
+                    
+                    nodeDetailSubScene.add(cell);
+                    
+                    // 각 셀 레이블 추가
+                    const text = `[${r},${c}]`;
+                    addTextLabel(text, new THREE.Vector3(x, y, 0.11), 0.2);
+                }
+            }
+            
+            // 메모리 이동 시뮬레이션을 위한 커서 
+            const cursorGeometry = new THREE.BoxGeometry(cellSize * 1.1, cellSize * 1.1, 0.1);
+            const cursorMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff5722,
+                transparent: true,
+                opacity: 0.5,
+                wireframe: true
+            });
+            const cursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
+            cursor.position.z = 0.15;
+            
+            // 커서 움직임 애니메이션 설정
+            cursor.userData = {
+                animationType: 'move',
+                startY: cursor.position.y,
+                moveTarget: new THREE.Vector3()
+            };
+            
+            // 커서가 메모리 셀 사이를 이동하는 애니메이션
+            let currentIndex = 0;
+            const maxIndex = rows * cols;
+            
+            function moveCursor() {
+                currentIndex = (currentIndex + 1) % maxIndex;
+                const row = Math.floor(currentIndex / cols);
+                const col = currentIndex % cols;
+                
+                const x = (col - (cols - 1) / 2) * (cellSize + spacing);
+                const y = (row - (rows - 1) / 2) * (cellSize + spacing);
+                
+                cursor.position.x = x;
+                cursor.position.y = y;
+                
+                setTimeout(moveCursor, 1000);
+            }
+            
+            moveCursor();
+            nodeDetailSubScene.add(cursor);
+            
+            // 설명 레이블
+            addTextLabel("Experience Buffer (FIFO Queue)", new THREE.Vector3(0, -4, 0));
+        }
+        
+        // Environment 내부 시각화
+        function createEnvironmentDetailViz() {
+            // 간단한 그리드월드 환경 생성
+            const gridSize = 5;
+            const cellSize = 1;
+            
+            // 그리드 바닥 생성
+            const gridGeometry = new THREE.PlaneGeometry(gridSize * cellSize, gridSize * cellSize);
+            const gridMaterial = new THREE.MeshBasicMaterial({
+                color: 0x1a237e,
+                side: THREE.DoubleSide
+            });
+            const grid = new THREE.Mesh(gridGeometry, gridMaterial);
+            grid.rotation.x = Math.PI / 2;
+            nodeDetailSubScene.add(grid);
+            
+            // 그리드 라인 생성
+            const gridHelper = new THREE.GridHelper(gridSize * cellSize, gridSize, 0x4fc3f7, 0x4fc3f7);
+            gridHelper.position.y = 0.01;
+            nodeDetailSubScene.add(gridHelper);
+            
+            // 에이전트 생성
+            const agentGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const agentMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff5722,
+                emissive: 0x330000
+            });
+            const agent = new THREE.Mesh(agentGeometry, agentMaterial);
+            agent.position.y = 0.3;
+            agent.position.x = -1.5;
+            agent.position.z = -1.5;
+            
+            // 에이전트 이동 경로 시뮬레이션
+            const path = [
+                new THREE.Vector3(-1.5, 0.3, -1.5),
+                new THREE.Vector3(-0.5, 0.3, -1.5),
+                new THREE.Vector3(0.5, 0.3, -1.5),
+                new THREE.Vector3(0.5, 0.3, -0.5),
+                new THREE.Vector3(1.5, 0.3, -0.5),
+                new THREE.Vector3(1.5, 0.3, 0.5),
+                new THREE.Vector3(1.5, 0.3, 1.5),
+                new THREE.Vector3(0.5, 0.3, 1.5),
+                new THREE.Vector3(-0.5, 0.3, 1.5),
+                new THREE.Vector3(-1.5, 0.3, 1.5),
+                new THREE.Vector3(-1.5, 0.3, 0.5),
+                new THREE.Vector3(-1.5, 0.3, -0.5),
+                new THREE.Vector3(-1.5, 0.3, -1.5)
+            ];
+            
+            let currentPathIndex = 0;
+            let nextPathIndex = 1;
+            let lerpFactor = 0;
+            
+            function moveAgent() {
+                lerpFactor += 0.02;
+                
+                if (lerpFactor >= 1) {
+                    lerpFactor = 0;
+                    currentPathIndex = nextPathIndex;
+                    nextPathIndex = (nextPathIndex + 1) % path.length;
+                }
+                
+                const currentPos = path[currentPathIndex];
+                const nextPos = path[nextPathIndex];
+                
+                agent.position.lerpVectors(currentPos, nextPos, lerpFactor);
+                
+                // 방향 계산
+                const direction = new THREE.Vector3().subVectors(nextPos, currentPos).normalize();
+                if (direction.length() > 0.001) {
+                    agent.lookAt(nextPos);
+                }
+            }
+            
+            // 에이전트 이동 애니메이션 설정
+            agent.userData = {
+                updateCallback: moveAgent
+            };
+            
+            nodeDetailSubScene.add(agent);
+            
+            // 목표 위치 생성
+            const goalGeometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+            const goalMaterial = new THREE.MeshPhongMaterial({
+                color: 0x4caf50,
+                emissive: 0x003300,
+                transparent: true,
+                opacity: 0.8
+            });
+            const goal = new THREE.Mesh(goalGeometry, goalMaterial);
+            goal.position.set(1.5, 0.3, 1.5);
+            goal.userData = {
+                animationType: 'pulse'
+            };
+            nodeDetailSubScene.add(goal);
+            
+            // 장애물 생성
+            const obstacleGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const obstacleMaterial = new THREE.MeshPhongMaterial({
+                color: 0xf44336,
+                emissive: 0x330000
+            });
+            
+            // 몇 개의 장애물 배치
+            const obstacles = [
+                new THREE.Vector3(-0.5, 0.4, 0.5),
+                new THREE.Vector3(0.5, 0.4, -0.5)
+            ];
+            
+            obstacles.forEach(pos => {
+                const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+                obstacle.position.copy(pos);
+                nodeDetailSubScene.add(obstacle);
+            });
+            
+            // 설명 텍스트
+            addTextLabel("그리드월드 환경 시뮬레이션", new THREE.Vector3(0, -4, 0));
+            
+            // 카메라 위치 조정
+            nodeDetailCamera.position.set(0, 8, 0);
+            nodeDetailCamera.lookAt(0, 0, 0);
+        }
+        
+        // Central Controller 내부 시각화
+        function createCentralControllerDetailViz() {
+            // 중앙 노드
+            const centerGeometry = new THREE.IcosahedronGeometry(1.5, 1);
+            const centerMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff5722,
+                emissive: 0x330000,
+                specular: 0xffffff,
+                shininess: 50
+            });
+            const center = new THREE.Mesh(centerGeometry, centerMaterial);
+            center.userData.animationType = 'rotate';
+            nodeDetailSubScene.add(center);
+            
+            // 에이전트 노드 생성
+            const agentCount = 4;
+            const agentNodes = [];
+            
+            for (let i = 0; i < agentCount; i++) {
+                const angle = (i / agentCount) * Math.PI * 2;
+                const x = Math.cos(angle) * 4;
+                const y = Math.sin(angle) * 4;
+                
+                const agentGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+                const agentMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xff9800,
+                    emissive: 0x330000,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const agent = new THREE.Mesh(agentGeometry, agentMaterial);
+                agent.position.set(x, y, 0);
+                agent.userData = {
+                    animationType: 'pulse',
+                    pulseSpeed: 0.5 + Math.random() * 0.5
+                };
+                
+                nodeDetailSubScene.add(agent);
+                agentNodes.push(agent);
+                
+                // 에이전트 - 중앙 컨트롤러 연결
+                const points = [];
+                points.push(new THREE.Vector3(0, 0, 0));
+                points.push(new THREE.Vector3(x, y, 0));
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: 0xff9800,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                nodeDetailSubScene.add(line);
+                
+                // 에이전트 라벨
+                addTextLabel(`Agent ${i+1}`, new THREE.Vector3(x * 1.2, y * 1.2, 0));
+            }
+            
+            // 데이터 흐름 시뮬레이션
+            function createDataFlow() {
+                // 중앙 -> 에이전트 데이터 흐름
+                for (let i = 0; i < agentNodes.length; i++) {
+                    const agent = agentNodes[i];
+                    setTimeout(() => {
+                        createDetailDataParticle(center, agent, 0xff5722);
+                    }, i * 300);
+                }
+                
+                // 에이전트 -> 중앙 데이터 흐름
+                setTimeout(() => {
+                    for (let i = 0; i < agentNodes.length; i++) {
+                        const agent = agentNodes[i];
+                        setTimeout(() => {
+                            createDetailDataParticle(agent, center, 0xff9800);
+                        }, i * 300);
+                    }
+                }, 2000);
+                
+                // 반복
+                setTimeout(createDataFlow, 4000);
+            }
+            
+            createDataFlow();
+            
+            // 설명 텍스트
+            addTextLabel("중앙 제어기 - 에이전트 통신", new THREE.Vector3(0, -5, 0));
+        }
+        
+        // Critic 내부 시각화
+        function createCriticDetailViz() {
+            // 중앙 평가자 네트워크 표현
+            const layers = [8, 12, 8, 1]; // 입력층, 은닉층, 출력층 크기
+            const layerDistance = 2.5;
+            const nodeRadius = 0.3;
+            
+            for (let l = 0; l < layers.length; l++) {
+                const layerNodes = layers[l];
+                const layerX = (l - (layers.length - 1) / 2) * layerDistance;
+                
+                for (let n = 0; n < layerNodes; n++) {
+                    const nodeY = (n - (layerNodes - 1) / 2) * 0.8;
+                    
+                    const nodeGeometry = new THREE.SphereGeometry(nodeRadius, 16, 16);
+                    const nodeMaterial = new THREE.MeshPhongMaterial({
+                        color: 0xe91e63,
+                        emissive: 0x330033,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                    node.position.set(layerX, nodeY, 0);
+                    node.userData = {
+                        animationType: 'pulse',
+                        startY: nodeY
+                    };
+                    nodeDetailSubScene.add(node);
+                    
+                    // 다음 레이어와 연결선 추가
+                    if (l < layers.length - 1) {
+                        const nextLayerNodes = layers[l + 1];
+                        const nextLayerX = layerX + layerDistance;
+                        
+                        for (let next = 0; next < nextLayerNodes; next++) {
+                            const nextNodeY = (next - (nextLayerNodes - 1) / 2) * 0.8;
+                            
+                            const points = [];
+                            points.push(new THREE.Vector3(layerX, nodeY, 0));
+                            points.push(new THREE.Vector3(nextLayerX, nextNodeY, 0));
+                            
+                            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0xf48fb1,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const line = new THREE.Line(lineGeometry, lineMaterial);
+                            nodeDetailSubScene.add(line);
+                        }
+                    }
+                }
+                
+                // 레이어 라벨 추가
+                let layerName = "";
+                if (l === 0) layerName = "Joint Input";
+                else if (l === layers.length - 1) layerName = "Q-Value";
+                else layerName = `Hidden ${l}`;
+                
+                addTextLabel(layerName, new THREE.Vector3(layerX, -4, 0));
+            }
+            
+            // 입력 유형 라벨 추가
+            const inputLabels = [
+                "Agent 1 State", "Agent 1 Action",
+                "Agent 2 State", "Agent 2 Action",
+                "Agent 3 State", "Agent 3 Action",
+                "Global State 1", "Global State 2"
+            ];
+            
+            const firstLayerX = -(layers.length - 1) / 2 * layerDistance;
+            for (let i = 0; i < inputLabels.length; i++) {
+                const y = (i - (layers[0] - 1) / 2) * 0.8;
+                addTextLabel(inputLabels[i], new THREE.Vector3(firstLayerX - 2, y, 0), 0.2);
+            }
+            
+            // 타이틀 추가
+            addTextLabel("Centralized Critic Network", new THREE.Vector3(0, 4, 0));
+        }
+        
+        // Mixer 내부 시각화
+        function createMixerDetailViz() {
+            // QMIX 믹서 네트워크 표현
+            // 에이전트 Q값 입력
+            const agentCount = 3;
+            const qGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const qMaterials = [
+                new THREE.MeshPhongMaterial({ color: 0xff5722 }),
+                new THREE.MeshPhongMaterial({ color: 0xff9800 }),
+                new THREE.MeshPhongMaterial({ color: 0xffc107 })
+            ];
+            
+            const qValues = [];
+            for (let i = 0; i < agentCount; i++) {
+                const y = (i - (agentCount - 1) / 2) * 2;
+                
+                const qBox = new THREE.Mesh(qGeometry, qMaterials[i]);
+                qBox.position.set(-4, y, 0);
+                qBox.userData = {
+                    animationType: 'pulse'
+                };
+                
+                nodeDetailSubScene.add(qBox);
+                qValues.push(qBox);
+                
+                // 레이블 추가
+                addTextLabel(`Agent ${i+1} Q-Value`, new THREE.Vector3(-4, y - 1.2, 0), 0.3);
+            }
+            
+            // 믹싱 네트워크 표현
+            const mixerGeometry = new THREE.BoxGeometry(3, 4, 1);
+            const mixerMaterial = new THREE.MeshPhongMaterial({
+                color: 0xffc107,
+                transparent: true,
+                opacity: 0.8,
+                wireframe: false
+            });
+            const mixer = new THREE.Mesh(mixerGeometry, mixerMaterial);
+            mixer.userData = {
+                animationType: 'rotate'
+            };
+            nodeDetailSubScene.add(mixer);
+            
+            // 입력 연결
+            for (let i = 0; i < agentCount; i++) {
+                const points = [];
+                points.push(qValues[i].position.clone());
+                points.push(new THREE.Vector3(-2, 0, 0));
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: qMaterials[i].color,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                nodeDetailSubScene.add(line);
+            }
+            
+            // Q-tot 출력
+            const qTotGeometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+            const qTotMaterial = new THREE.MeshPhongMaterial({
+                color: 0x2196f3,
+                emissive: 0x001030,
+                transparent: true,
+                opacity: 0.9
+            });
+            const qTot = new THREE.Mesh(qTotGeometry, qTotMaterial);
+            qTot.position.set(4, 0, 0);
+            qTot.userData = {
+                animationType: 'pulse'
+            };
+            nodeDetailSubScene.add(qTot);
+            
+            // 출력 연결
+            const outputPoints = [];
+            outputPoints.push(new THREE.Vector3(1.5, 0, 0));
+            outputPoints.push(qTot.position.clone());
+            
+            const outputLineGeometry = new THREE.BufferGeometry().setFromPoints(outputPoints);
+            const outputLineMaterial = new THREE.LineBasicMaterial({
+                color: 0x2196f3,
+                transparent: true,
+                opacity: 0.7
+            });
+            const outputLine = new THREE.Line(outputLineGeometry, outputLineMaterial);
+            nodeDetailSubScene.add(outputLine);
+            
+            // Q-tot 레이블 추가
+            addTextLabel("Joint Q-Value (Q-tot)", new THREE.Vector3(4, -1.5, 0));
+            
+            // 하이퍼네트워크 레이블 추가
+            addTextLabel("QMIX Mixer Network", new THREE.Vector3(0, 3, 0));
+            
+            // 글로벌 상태 입력 표현
+            const stateGeometry = new THREE.PlaneGeometry(2, 0.5);
+            const stateMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4caf50,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            // 여러 글로벌 상태 입력 표현
+            for (let i = 0; i < 3; i++) {
+                const state = new THREE.Mesh(stateGeometry, stateMaterial);
+                state.position.set(0, -3, 0);
+                state.rotation.x = Math.PI / 2;
+                
+                // 화살표로 믹서로의 연결 표현
+                const arrowPoints = [];
+                arrowPoints.push(new THREE.Vector3(0, -2.5, 0));
+                arrowPoints.push(new THREE.Vector3(0, -1.8, 0));
+                
+                const arrowGeometry = new THREE.BufferGeometry().setFromPoints(arrowPoints);
+                const arrowMaterial = new THREE.LineBasicMaterial({
+                    color: 0x4caf50,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const arrow = new THREE.Line(arrowGeometry, arrowMaterial);
+                
+                nodeDetailSubScene.add(state);
+                nodeDetailSubScene.add(arrow);
+            }
+            
+            // 글로벌 상태 레이블
+            addTextLabel("Global State Input", new THREE.Vector3(0, -3.5, 0));
+            
+            // 데이터 흐름 시뮬레이션
+            function simulateDataFlow() {
+                // 에이전트 Q값 -> 믹서
+                for (let i = 0; i < agentCount; i++) {
+                    setTimeout(() => {
+                        const startPos = qValues[i].position.clone();
+                        const endPos = new THREE.Vector3(-2, 0, 0);
+                        createDetailDataParticle(startPos, endPos, qMaterials[i].color);
+                    }, i * 300);
+                }
+                
+                // 믹서 -> Q-tot
+                setTimeout(() => {
+                    const startPos = new THREE.Vector3(1.5, 0, 0);
+                    createDetailDataParticle(startPos, qTot.position, 0x2196f3);
+                }, 1500);
+                
+                // 반복
+                setTimeout(simulateDataFlow, 3000);
+            }
+            
+            simulateDataFlow();
+        }
+        
+        // Hypernetwork 내부 시각화
+        function createHypernetworkDetailViz() {
+            // 하이퍼네트워크 구조 표현
+            const layers = [4, 6, 8]; // 입력층, 은닉층, 출력층 크기
+            const layerDistance = 3;
+            const nodeRadius = 0.3;
+            
+            for (let l = 0; l < layers.length; l++) {
+                const layerNodes = layers[l];
+                const layerX = (l - (layers.length - 1) / 2) * layerDistance;
+                
+                for (let n = 0; n < layerNodes; n++) {
+                    const nodeY = (n - (layerNodes - 1) / 2) * 0.8;
+                    
+                    const nodeGeometry = new THREE.SphereGeometry(nodeRadius, 16, 16);
+                    const nodeMaterial = new THREE.MeshPhongMaterial({
+                        color: 0x9c27b0,
+                        emissive: 0x300030,
+                        transparent: true,
+                        opacity: 0.9
+                    });
+                    const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+                    node.position.set(layerX, nodeY, 0);
+                    node.userData = {
+                        animationType: 'pulse',
+                        startY: nodeY
+                    };
+                    nodeDetailSubScene.add(node);
+                    
+                    // 다음 레이어와 연결선 추가
+                    if (l < layers.length - 1) {
+                        const nextLayerNodes = layers[l + 1];
+                        const nextLayerX = layerX + layerDistance;
+                        
+                        for (let next = 0; next < nextLayerNodes; next++) {
+                            const nextNodeY = (next - (nextLayerNodes - 1) / 2) * 0.8;
+                            
+                            const points = [];
+                            points.push(new THREE.Vector3(layerX, nodeY, 0));
+                            points.push(new THREE.Vector3(nextLayerX, nextNodeY, 0));
+                            
+                            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                            const lineMaterial = new THREE.LineBasicMaterial({
+                                color: 0xce93d8,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const line = new THREE.Line(lineGeometry, lineMaterial);
+                            nodeDetailSubScene.add(line);
+                        }
+                    }
+                }
+                
+                // 레이어 라벨 추가
+                let layerName = "";
+                if (l === 0) layerName = "Input Layer";
+                else if (l === layers.length - 1) layerName = "Output Layer";
+                else layerName = `Hidden Layer ${l}`;
+                
+                addTextLabel(layerName, new THREE.Vector3(layerX, -4, 0));
+            }
+            
+            // 하이퍼네트워크 레이블 추가
+            addTextLabel("Hypernetwork", new THREE.Vector3(0, 3, 0));
+            
+            // 글로벌 상태 입력 표현
+            const stateGeometry = new THREE.PlaneGeometry(2, 0.5);
+            const stateMaterial = new THREE.MeshBasicMaterial({
+                color: 0x4caf50,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            // 여러 글로벌 상태 입력 표현
+            for (let i = 0; i < 3; i++) {
+                const state = new THREE.Mesh(stateGeometry, stateMaterial);
+                state.position.set(0, -3, 0);
+                state.rotation.x = Math.PI / 2;
+                
+                // 화살표로 믹서로의 연결 표현
+                const arrowPoints = [];
+                arrowPoints.push(new THREE.Vector3(0, -2.5, 0));
+                arrowPoints.push(new THREE.Vector3(0, -1.8, 0));
+                
+                const arrowGeometry = new THREE.BufferGeometry().setFromPoints(arrowPoints);
+                const arrowMaterial = new THREE.LineBasicMaterial({
+                    color: 0x4caf50,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const arrow = new THREE.Line(arrowGeometry, arrowMaterial);
+                
+                nodeDetailSubScene.add(state);
+                nodeDetailSubScene.add(arrow);
+            }
+            
+            // 글로벌 상태 레이블
+            addTextLabel("Global State Input", new THREE.Vector3(0, -3.5, 0));
+            
+            // 데이터 흐름 시뮬레이션
+            function simulateDataFlow() {
+                // 에이전트 Q값 -> 믹서
+                for (let i = 0; i < agentCount; i++) {
+                    setTimeout(() => {
+                        const startPos = qValues[i].position.clone();
+                        const endPos = new THREE.Vector3(-2, 0, 0);
+                        createDetailDataParticle(startPos, endPos, qMaterials[i].color);
+                    }, i * 300);
+                }
+                
+                // 믹서 -> Q-tot
+                setTimeout(() => {
+                    const startPos = new THREE.Vector3(1.5, 0, 0);
+                    createDetailDataParticle(startPos, qTot.position, 0x2196f3);
+                }, 1500);
+                
+                // 반복
+                setTimeout(simulateDataFlow, 3000);
+            }
+            
+            simulateDataFlow();
+        }
+        
+        // 기본 노드 내부 시각화 (특별한 구현이 없는 노드용)
+        function createDefaultDetailViz(nodeId) {
+            // 이전 시각화 정리
+            if (nodeDetailRenderer) {
+                const container = document.getElementById('node-viz');
+                if (container.querySelector('canvas')) {
+                    container.removeChild(nodeDetailRenderer.domElement);
+                }
+            }
+            
+            // 컨테이너 크기 계산
+            const container = document.getElementById('node-viz');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            // 씬 생성
+            nodeDetailSubScene = new THREE.Scene();
+            nodeDetailSubScene.background = new THREE.Color(0x0a0a0a);
+            
+            // 카메라 설정
+            nodeDetailCamera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
+            nodeDetailCamera.position.set(0, 0, 10);
+            nodeDetailCamera.lookAt(0, 0, 0);
+            
+            // 렌더러 설정
+            nodeDetailRenderer = new THREE.WebGLRenderer({ antialias: true });
+            nodeDetailRenderer.setSize(width, height);
+            container.appendChild(nodeDetailRenderer.domElement);
+            
+            // 조명 설정
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            nodeDetailSubScene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1);
+            nodeDetailSubScene.add(directionalLight);
+            
+            // 노드 유형에 따라 다른 시각화 생성
+            switch (nodeId) {
+                case 'env':
+                    createEnvironmentDetailViz();
+                    break;
+                case 'memory':
+                    createMemoryDetailViz();
+                    break;
+                default:
+                    // 기본 노드는 특별한 시각화가 없으므로 기본 노드 시각화 함수 호출
+                    createDefaultDetailViz(nodeId);
+            }
+            
+            // 애니메이션 시작
+            animateNodeDetail();
+        }
+        
+        // 텍스트 라벨 생성 유틸리티 함수
+        function addTextLabel(text, position, size = 0.4) {
+            const textGeometry = new THREE.TextGeometry(text, {
+                font: 'Arial',
+                size: size,
+                height: 0.01,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.01,
+                bevelSize: 0.01,
+                bevelSegments: 1
+            });
+            const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+            textMesh.position.set(position.x, position.y, position.z);
+            nodeDetailSubScene.add(textMesh);
+        }
+        
+        // 내부 시각화용 데이터 입자 생성
+        function createDetailDataParticle(startPos, endPos, color = 0xffeb3b, size = 0.2) {
+            const geometry = new THREE.SphereGeometry(size, 16, 16);
+            const material = new THREE.MeshBasicMaterial({ color: color });
+            const particle = new THREE.Mesh(geometry, material);
+            particle.position.copy(startPos);
+            
+            // 파티클 데이터 설정
+            particle.userData = {
+                startPos: startPos.clone(),
+                endPos: endPos.clone(),
+                progress: 0,
+                speed: 0.01,
+                completed: false
+            };
+            
+            scene.add(particle);
+            dataParticles.push(particle);
+            
+            return particle;
+        }
+        
+        // 페이지 로드 시 초기화
+        window.onload = function() {
+            init();
+            
+            // 이벤트 리스너 등록
+            window.addEventListener('click', onMouseClick);
+            document.getElementById('close-detail').addEventListener('click', closeNodeDetail);
+        };
+    </script>
+</body>
+</html>
